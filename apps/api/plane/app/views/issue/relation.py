@@ -21,6 +21,7 @@ from rest_framework import status
 from .. import BaseViewSet
 from plane.app.serializers import IssueRelationSerializer, RelatedIssueSerializer
 from plane.app.permissions import ProjectEntityPermission, issue_hidden_from_guest
+from plane.app.views.workspace.user import _visible_issues_q
 from plane.db.models import (
     Project,
     IssueRelation,
@@ -137,8 +138,11 @@ class IssueRelationViewSet(BaseViewSet):
             "related_issue_id", flat=True
         )
 
+        # Relations can cross projects, so the related issues are limited to those the
+        # caller may view: projects they are an active member of, and for a restricted
+        # guest only the issues they created. Same rule as the external API relation list.
         queryset = (
-            Issue.issue_objects.filter(workspace__slug=slug)
+            Issue.issue_objects.filter(_visible_issues_q(request.user), workspace__slug=slug)
             .select_related("workspace", "project", "state", "parent")
             .prefetch_related("assignees", "labels", "issue_module__module")
             .annotate(
